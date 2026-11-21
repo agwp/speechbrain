@@ -1,6 +1,7 @@
 # How to run an ASR experiment with People's Speech
 
 This recipe provides the necessary recipe to train a speech recognizer on the People's Speech dataset.
+Install the recipe's extra requirements with Python 3.10 or later.
 
 ## Downloading the dataset
 
