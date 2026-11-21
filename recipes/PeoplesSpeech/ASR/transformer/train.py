@@ -26,10 +26,10 @@ Authors
 
 import os
 import sys
+from io import BytesIO
 
-import numpy as np
+import librosa
 import torch
-import torchaudio
 from hyperpyyaml import load_hyperpyyaml
 
 import speechbrain as sb
@@ -222,6 +222,8 @@ def dataio_prepare(hparams):
     It also defines the data processing pipeline through user-defined functions.
     """
 
+    from datasets import Audio
+
     # We load the dataset
     ds = load_and_concatenate_datasets(
         hparams["subsets"],
@@ -230,9 +232,12 @@ def dataio_prepare(hparams):
 
     # We must rename the 'id' column because SpeechBrain sampling use this
     # name for the sampler already, also it's not an id, but an audio_path.
-    train_data = ds[0].rename_column("id", "audio_id")
-    valid_data = ds[1].rename_column("id", "audio_id")
-    test_data = ds[2].rename_column("id", "audio_id")
+    train_data, valid_data, test_data = [
+        split.rename_column("id", "audio_id").cast_column(
+            "audio", Audio(decode=False)
+        )
+        for split in ds
+    ]
 
     # We need to get the full list of durations of all samples to enable
     # bucketing from the dynamic batch sampler. We do it that way instead
@@ -262,13 +267,12 @@ def dataio_prepare(hparams):
     @sb.utils.data_pipeline.takes("audio")
     @sb.utils.data_pipeline.provides("sig")
     def audio_pipeline(audio):
-        if audio["sampling_rate"] != 16000:
-            sig = torchaudio.transforms.Resample(
-                audio["sampling_rate"],
-                16000,
-            )(audio["array"])
-        else:
-            sig = audio["array"].astype(np.single)
+        source = (
+            BytesIO(audio["bytes"])
+            if audio["bytes"] is not None
+            else audio["path"]
+        )
+        sig, _ = librosa.load(source, sr=16000)
         yield sig
 
     sb.dataio.dataset.add_dynamic_item(datasets, audio_pipeline)
